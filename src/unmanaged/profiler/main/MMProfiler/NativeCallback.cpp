@@ -59,7 +59,7 @@ void _FunctionTailcall2(
     FunctionTailcall2Global(funcID, clientData, func);
 }
 #else
-void _declspec(naked) _FunctionEnter2(
+void _declspec(naked) __stdcall _FunctionEnter2(
     FunctionID funcID, 
     UINT_PTR clientData, 
     COR_PRF_FRAME_INFO func, 
@@ -87,7 +87,7 @@ void _declspec(naked) _FunctionEnter2(
     }
 }
 
-void _declspec(naked) _FunctionLeave2(
+void _declspec(naked) __stdcall _FunctionLeave2(
     FunctionID funcID, 
     UINT_PTR clientData, 
     COR_PRF_FRAME_INFO func, 
@@ -115,7 +115,7 @@ void _declspec(naked) _FunctionLeave2(
     }
 }
 
-void _declspec(naked) _FunctionTailcall2(
+void _declspec(naked) __stdcall _FunctionTailcall2(
     FunctionID funcID, 
     UINT_PTR clientData, 
     COR_PRF_FRAME_INFO func)
