@@ -9,6 +9,13 @@
  *  * Then run mono with:
  *  * mono --profile=sample your_application.exe
  *  */
+#define DEBUG_PROFILER 1
+#if (DEBUG_PROFILER)
+#define DEBUG(m) printf ("%s\n", m)
+#else
+#define DEBUG(m)
+#endif
+
 
 struct _MonoProfiler {
         int ncalls;
@@ -41,7 +48,8 @@ void
 mono_profiler_startup (const char *desc)
 {
         MonoProfiler *prof;
-        g_print("initialize");
+
+        DEBUG("initialize");
         //prof = g_new0 (MonoProfiler, 1);
         prof = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
 
