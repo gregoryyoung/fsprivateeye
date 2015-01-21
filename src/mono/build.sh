@@ -1,0 +1,1 @@
+gcc -shared -o mono-profiler-sample.so profiler.c -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -lglib-2.0 -D_REENTRANT -I/opt/mono/lib/pkgconfig/../../include/mono-2.0 -L/opt/mono/lib/pkgconfig/../../lib -lmono-2.0 -lm -lrt -ldl -lpthread -fPIC
