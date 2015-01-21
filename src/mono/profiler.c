@@ -3,18 +3,22 @@
 #include <mono/metadata/profiler.h>
 #include <glib.h>
 /*
- *  * Bare bones profiler. Compile with:
- *  * gcc -shared -o mono-profiler-sample.so sample.c `pkg-config --cflags --libs mono`
- *  * Install the binary where the dynamic loader can find it.
- *  * Then run mono with:
- *  * mono --profile=sample your_application.exe
+ * Profiling backend for privateeye in mono. Uses the mono profiler api and
+ * writes to a named pipe that gets processed by the privateeye backend
+ * in the host process.
+ * TODO add more comments and stuff
  *  */
+
+
 #define DEBUG_PROFILER 1
 #if (DEBUG_PROFILER)
 #define DEBUG(m) printf ("%s\n", m)
 #else
 #define DEBUG(m)
 #endif
+
+/* Time counting */
+
 
 
 struct _MonoProfiler {
@@ -33,8 +37,11 @@ static void
 sample_method_enter (MonoProfiler *prof, MonoMethod *method)
 {
         char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
-        printf("called: %s %s", mono_method_get_name (method), signature);
-        g_free(signature);
+        char *name = (char*) mono_method_get_name (method);
+        if(signature != NULL && name != NULL) {
+            printf("called: %s %s", name, signature);
+        }   
+        g_free (signature);
         prof->ncalls++;
 }
 
@@ -43,7 +50,10 @@ sample_method_leave (MonoProfiler *prof, MonoMethod *method)
 {
 }
 
-/* the entry point */
+
+
+
+/* The main entry point of profiler (called back from mono, defined in profile.h)*/
 void
 mono_profiler_startup (const char *desc)
 {
