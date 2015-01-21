@@ -22,6 +22,12 @@
         return;\
 } while (0)
 
+/* MonoProfiler Opaque struct */
+struct _MonoProfiler {
+    int ncalls;
+    int allocations;
+    gboolean profiler_enabled;
+};
 
 
 /* Time counting */
@@ -143,11 +149,11 @@ static __inline__ guint64 rdtsc(void) {
                 return ((guint64) lo) | (((guint64) hi) << 32);
 }
 #define MONO_PROFILER_GET_CURRENT_COUNTER(c) {\
-        if (use_fast_timer) {\
-                    (c) = rdtsc ();\
-                } else {\
-                            MONO_PROFILER_GET_CURRENT_TIME ((c));\
-                        }\
+    if (use_fast_timer) {\
+        (c) = rdtsc ();\
+    } else {\
+        MONO_PROFILER_GET_CURRENT_TIME ((c));\
+    }\
 } while (0)
 #else
 static void detect_fast_timer (void) {
@@ -158,11 +164,6 @@ static void detect_fast_timer (void) {
 
 
 
-/* MonoProfiler Opaque struct */
-struct _MonoProfiler {
-    int ncalls;
-    gboolean profiler_enabled;
-};
 
 static void
 enable_profiler (MonoProfiler *profiler) {
@@ -179,7 +180,11 @@ get_method_name(MonoMethod *method) {
     MonoClass *klass = mono_method_get_class (method);
     char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
     if(signature == NULL) return NULL; 
-    char *name = g_strdup_printf ("%s.%s:%s (%s)", mono_class_get_namespace (klass), mono_class_get_name (klass), mono_method_get_name (method), signature);
+    char *name = g_strdup_printf ("%s.%s:%s (%s)", 
+                                 mono_class_get_namespace (klass), 
+                                 mono_class_get_name (klass), 
+                                 mono_method_get_name (method), 
+                                 signature);
     g_free (signature);
     return name; 
 }
@@ -197,13 +202,17 @@ sample_shutdown (MonoProfiler *profiler)
     CHECK_PROFILER_ENABLED();
     DEBUG("exiting\n");
     printf("number of calls is %d\n", profiler->ncalls);
+    printf("number of allocations is %d\n", profiler->allocations);
 }
 
 static void
 sample_method_enter (MonoProfiler *profiler, MonoMethod *method)
 {
+    guint64 counter;
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     CHECK_PROFILER_ENABLED();
-    DEBUG(get_method_name (method));
+    //printf("%lu ", counter);
+    //DEBUG(get_method_name (method));
     profiler->ncalls++;
 }
 
@@ -211,6 +220,12 @@ static void
 sample_method_leave (MonoProfiler *profiler, MonoMethod *method)
 {
     CHECK_PROFILER_ENABLED();
+}
+
+static void
+object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
+    printf("allocating\n");
+    profiler->allocations++;
 }
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
@@ -226,6 +241,8 @@ mono_profiler_startup (const char *desc)
     mono_profiler_install (prof, sample_shutdown);
     mono_profiler_install_enter_leave (sample_method_enter, sample_method_leave);
     mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE);
+    mono_profiler_install_allocation (object_allocated);
+
     enable_profiler (prof);
 }
 
