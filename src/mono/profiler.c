@@ -178,6 +178,7 @@ disable_profiler (MonoProfiler *profiler) {
 static char *
 get_method_name(MonoMethod *method) {
     MonoClass *klass = mono_method_get_class (method);
+    if(klass == NULL) return NULL;
     char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
     if(signature == NULL) return NULL; 
     char *name = g_strdup_printf ("%s.%s:%s (%s)", 
@@ -199,6 +200,7 @@ get_method_name(MonoMethod *method) {
 static void
 sample_shutdown (MonoProfiler *profiler)
 {
+    mono_profiler_set_events (0);
     CHECK_PROFILER_ENABLED();
     DEBUG("exiting\n");
     printf("number of calls is %d\n", profiler->ncalls);
@@ -211,22 +213,41 @@ sample_method_enter (MonoProfiler *profiler, MonoMethod *method)
     guint64 counter;
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     CHECK_PROFILER_ENABLED();
-    //printf("%lu ", counter);
-    //DEBUG(get_method_name (method));
+    char *name = get_method_name(method);
+    printf("enter %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
 static void
 sample_method_leave (MonoProfiler *profiler, MonoMethod *method)
 {
+    guint64 counter;
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     CHECK_PROFILER_ENABLED();
+    char *name = get_method_name(method);
+    printf("leave %lu %s\n", counter, name);
+    profiler->ncalls++;
 }
 
 static void
 object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
-    printf("allocating\n");
+    //DEBUG("allocating\n");
+    guint size = mono_object_get_size (obj);
+    printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
     profiler->allocations++;
 }
+
+static void
+method_jit_result (MonoProfiler *prof, MonoMethod *method, MonoJitInfo* jinfo, int result) {
+    if (result == MONO_PROFILE_OK) {
+        char *name = get_method_name (method);
+        gpointer code_start = mono_jit_info_get_code_start (jinfo);
+        int code_size = mono_jit_info_get_code_size (jinfo);
+        if(name == NULL) return;
+        printf("JIT occured %s size is %d\n", name, code_size);
+    }
+}
+
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
 void
@@ -240,9 +261,10 @@ mono_profiler_startup (const char *desc)
 
     mono_profiler_install (prof, sample_shutdown);
     mono_profiler_install_enter_leave (sample_method_enter, sample_method_leave);
-    mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE);
-    mono_profiler_install_allocation (object_allocated);
+    mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE | MONO_PROFILE_JIT_COMPILATION | MONO_PROFILE_ALLOCATIONS);
 
+    mono_profiler_install_allocation (object_allocated);
+    mono_profiler_install_jit_end (method_jit_result);
     enable_profiler (prof);
 }
 
