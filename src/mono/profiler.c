@@ -42,7 +42,7 @@ void
 mono_profiler_startup (const char *desc)
 {
         MonoProfiler *prof;
-
+        g_print("initialize");
         //prof = g_new0 (MonoProfiler, 1);
         prof = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
 
