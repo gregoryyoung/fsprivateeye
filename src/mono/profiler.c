@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mono/metadata/profiler.h>
-
-#define FALSE 0
-#define TRUE !FALSE
+#include <glib.h>
 /*
  *  * Bare bones profiler. Compile with:
  *  * gcc -shared -o mono-profiler-sample.so sample.c `pkg-config --cflags --libs mono`
@@ -20,6 +18,7 @@ struct _MonoProfiler {
 static void
 sample_shutdown (MonoProfiler *prof)
 {
+        printf("exiting");
         g_print ("total number of calls: %d\n", prof->ncalls);
 }
 
@@ -27,7 +26,7 @@ static void
 sample_method_enter (MonoProfiler *prof, MonoMethod *method)
 {
         char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
-        g_print("called: %s %s", mono_method_get_name (method), signature);
+        printf("called: %s %s", mono_method_get_name (method), signature);
         g_free(signature);
         prof->ncalls++;
 }
