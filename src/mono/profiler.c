@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <mono/metadata/profiler.h>
 #include <glib.h>
-
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 /*
  * Profiling backend for privateeye in mono. Uses the mono profiler api and
  * writes to a named pipe that gets processed by the privateeye backend
@@ -17,13 +19,20 @@
 #define DEBUG(m)
 #endif
 
+#define LOCK_PROFILER() do { pthread_mutex_lock (&(profiler->mutex));} while (0)
+#define UNLOCK_PROFILER() do { pthread_mutex_unlock (&(profiler->mutex));} while (0)
+
 #define CHECK_PROFILER_ENABLED() do {\
     if (! profiler->profiler_enabled)\
         return;\
 } while (0)
 
+#define INITIALIZE_PROFILER_MUTEX() pthread_mutex_init (&(profiler->mutex), NULL)
+#define DELETE_PROFILER_MUTEX() pthread_mutex_destroy (&(profiler->mutex))
+
 /* MonoProfiler Opaque struct */
 struct _MonoProfiler {
+    pthread_mutex_t mutex;
     int ncalls;
     int allocations;
     gboolean profiler_enabled;
@@ -145,8 +154,8 @@ static void detect_fast_timer (void) {
 
 static __inline__ guint64 rdtsc(void) {
         guint32 hi, lo;
-            __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
-                return ((guint64) lo) | (((guint64) hi) << 32);
+        __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+        return ((guint64) lo) | (((guint64) hi) << 32);
 }
 #define MONO_PROFILER_GET_CURRENT_COUNTER(c) {\
     if (use_fast_timer) {\
@@ -162,9 +171,6 @@ static void detect_fast_timer (void) {
 #define MONO_PROFILER_GET_CURRENT_COUNTER(c) MONO_PROFILER_GET_CURRENT_TIME ((c))
 #endif
 
-
-
-
 static void
 enable_profiler (MonoProfiler *profiler) {
     profiler->profiler_enabled = TRUE;
@@ -176,18 +182,23 @@ disable_profiler (MonoProfiler *profiler) {
 }
 
 static char *
-get_method_name(MonoMethod *method) {
+get_method_name(MonoProfiler *profiler, MonoMethod *method) {
+    //LOCK_PROFILER();
     MonoClass *klass = mono_method_get_class (method);
     if(klass == NULL) return NULL;
     char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
     if(signature == NULL) return NULL; 
+    const char *namespace = mono_class_get_namespace (klass);
+    const char *klassname = mono_class_get_name (klass);
+    const char *methodname = mono_method_get_class (method);
     char *name = g_strdup_printf ("%s.%s:%s (%s)", 
                                  mono_class_get_namespace (klass), 
                                  mono_class_get_name (klass), 
                                  mono_method_get_name (method), 
-                                 signature);
-    g_free (signature);
-    return name; 
+                                 "test");
+    //g_free (signature);
+    //UNLOCK_PROFILER();
+    return ""; 
 }
 
 
@@ -200,21 +211,23 @@ get_method_name(MonoMethod *method) {
 static void
 sample_shutdown (MonoProfiler *profiler)
 {
+    LOCK_PROFILER();
     mono_profiler_set_events (0);
     CHECK_PROFILER_ENABLED();
     DEBUG("exiting\n");
     printf("number of calls is %d\n", profiler->ncalls);
     printf("number of allocations is %d\n", profiler->allocations);
+    UNLOCK_PROFILER();
 }
 
 static void
 sample_method_enter (MonoProfiler *profiler, MonoMethod *method)
 {
     guint64 counter;
-    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     CHECK_PROFILER_ENABLED();
-    char *name = get_method_name(method);
-    printf("enter %lu %s\n", counter, name);
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
+    char *name = get_method_name(profiler, method);
+    //printf("enter %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
@@ -222,29 +235,29 @@ static void
 sample_method_leave (MonoProfiler *profiler, MonoMethod *method)
 {
     guint64 counter;
-    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     CHECK_PROFILER_ENABLED();
-    char *name = get_method_name(method);
-    printf("leave %lu %s\n", counter, name);
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
+    char *name = get_method_name(profiler, method);
+    //printf("leave %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
 static void
 object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
-    //DEBUG("allocating\n");
+    CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
-    printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
+    //printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
     profiler->allocations++;
 }
 
 static void
-method_jit_result (MonoProfiler *prof, MonoMethod *method, MonoJitInfo* jinfo, int result) {
+method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* jinfo, int result) {
+    CHECK_PROFILER_ENABLED();
     if (result == MONO_PROFILE_OK) {
-        char *name = get_method_name (method);
+        char *name = get_method_name (profiler, method);
         gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
-        printf("JIT occured %s size is %d\n", name, code_size);
     }
 }
 
@@ -253,18 +266,18 @@ method_jit_result (MonoProfiler *prof, MonoMethod *method, MonoJitInfo* jinfo, i
 void
 mono_profiler_startup (const char *desc)
 {
-    MonoProfiler *prof;
+    MonoProfiler *profiler;
 
     DEBUG("initialize");
-    prof = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
-    prof->profiler_enabled = TRUE;
-
-    mono_profiler_install (prof, sample_shutdown);
+    profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
+    profiler->profiler_enabled = TRUE;
+    INITIALIZE_PROFILER_MUTEX();
+    mono_profiler_install (profiler, sample_shutdown);
     mono_profiler_install_enter_leave (sample_method_enter, sample_method_leave);
     mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE | MONO_PROFILE_JIT_COMPILATION | MONO_PROFILE_ALLOCATIONS);
 
     mono_profiler_install_allocation (object_allocated);
     mono_profiler_install_jit_end (method_jit_result);
-    enable_profiler (prof);
+    enable_profiler (profiler);
 }
 
