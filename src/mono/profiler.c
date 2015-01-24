@@ -183,21 +183,20 @@ disable_profiler (MonoProfiler *profiler) {
 
 static char *
 get_method_name(MonoProfiler *profiler, MonoMethod *method) {
-    LOCK_PROFILER();
     MonoClass *klass = mono_method_get_class (method);
     if(klass == NULL) return NULL;
-    char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
+    if(method == NULL) return NULL;
+    char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), 0);
     if(signature == NULL) return NULL; 
     const char *namespace = mono_class_get_namespace (klass);
     const char *klassname = mono_class_get_name (klass);
     const char *methodname = mono_method_get_class (method);
+    //g_free (signature);
     char *name = g_strdup_printf ("%s.%s:%s (%s)", 
                                  mono_class_get_namespace (klass), 
                                  mono_class_get_name (klass), 
                                  mono_method_get_name (method), 
                                  "test");
-    //g_free (signature);
-    UNLOCK_PROFILER();
     return name; 
 }
 
@@ -226,8 +225,8 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method)
     guint64 counter;
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
-    char *name = get_method_name(profiler, method);
-    printf("enter %lu %s\n", counter, name);
+    //char *name = get_method_name(profiler, method);
+    //printf("enter %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
@@ -237,7 +236,7 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method)
     guint64 counter;
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
-    char *name = get_method_name(profiler, method);
+    //char *name = get_method_name(profiler, method);
     //printf("leave %lu %s\n", counter, name);
 }
 
@@ -257,6 +256,7 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
         gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
+        printf ("JIT completed %s\n", name);
     }
 }
 
