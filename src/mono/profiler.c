@@ -183,7 +183,7 @@ disable_profiler (MonoProfiler *profiler) {
 
 static char *
 get_method_name(MonoProfiler *profiler, MonoMethod *method) {
-    //LOCK_PROFILER();
+    LOCK_PROFILER();
     MonoClass *klass = mono_method_get_class (method);
     if(klass == NULL) return NULL;
     char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
@@ -197,8 +197,8 @@ get_method_name(MonoProfiler *profiler, MonoMethod *method) {
                                  mono_method_get_name (method), 
                                  "test");
     //g_free (signature);
-    //UNLOCK_PROFILER();
-    return ""; 
+    UNLOCK_PROFILER();
+    return name; 
 }
 
 
@@ -209,7 +209,7 @@ get_method_name(MonoProfiler *profiler, MonoMethod *method) {
  **********************************************************************/
 
 static void
-sample_shutdown (MonoProfiler *profiler)
+pe_shutdown (MonoProfiler *profiler)
 {
     LOCK_PROFILER();
     mono_profiler_set_events (0);
@@ -221,29 +221,28 @@ sample_shutdown (MonoProfiler *profiler)
 }
 
 static void
-sample_method_enter (MonoProfiler *profiler, MonoMethod *method)
+pe_method_enter (MonoProfiler *profiler, MonoMethod *method)
 {
     guint64 counter;
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    //printf("enter %lu %s\n", counter, name);
+    printf("enter %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
 static void
-sample_method_leave (MonoProfiler *profiler, MonoMethod *method)
+pe_method_leave (MonoProfiler *profiler, MonoMethod *method)
 {
     guint64 counter;
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
     //printf("leave %lu %s\n", counter, name);
-    profiler->ncalls++;
 }
 
 static void
-object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
+pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
     //printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
@@ -251,7 +250,7 @@ object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
 }
 
 static void
-method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* jinfo, int result) {
+pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* jinfo, int result) {
     CHECK_PROFILER_ENABLED();
     if (result == MONO_PROFILE_OK) {
         char *name = get_method_name (profiler, method);
@@ -261,6 +260,28 @@ method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* jinf
     }
 }
 
+static void
+pe_throw_callback (MonoProfiler *profiler, MonoObject *object) {
+    printf("exception thrown\n");
+    CHECK_PROFILER_ENABLED();
+}
+
+static void 
+pe_clause_callback (MonoProfiler *profiler, MonoMethod *method, int clause_type, int clause_num) {
+    printf("clause call back\n");
+    CHECK_PROFILER_ENABLED();
+}
+
+static void
+pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method)
+{
+    printf("method leave due to exception.\n");
+    guint64 counter;
+    CHECK_PROFILER_ENABLED();
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
+    char *name = get_method_name(profiler, method);
+    //printf("leave %lu %s\n", counter, name);
+}
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
 void
@@ -272,12 +293,17 @@ mono_profiler_startup (const char *desc)
     profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
     profiler->profiler_enabled = TRUE;
     INITIALIZE_PROFILER_MUTEX();
-    mono_profiler_install (profiler, sample_shutdown);
-    mono_profiler_install_enter_leave (sample_method_enter, sample_method_leave);
-    mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE | MONO_PROFILE_JIT_COMPILATION | MONO_PROFILE_ALLOCATIONS);
+    mono_profiler_install (profiler, pe_shutdown);
+    mono_profiler_install_enter_leave (pe_method_enter, pe_method_leave);
+    mono_profiler_install_exception (pe_throw_callback, pe_exc_method_leave, pe_clause_callback);
 
-    mono_profiler_install_allocation (object_allocated);
-    mono_profiler_install_jit_end (method_jit_result);
+    mono_profiler_set_events (MONO_PROFILE_ENTER_LEAVE | 
+                              MONO_PROFILE_JIT_COMPILATION | 
+                              MONO_PROFILE_ALLOCATIONS | 
+                              MONO_PROFILE_EXCEPTIONS);
+
+    mono_profiler_install_allocation (pe_object_allocated);
+    mono_profiler_install_jit_end (pe_method_jit_result);
     enable_profiler (profiler);
 }
 
