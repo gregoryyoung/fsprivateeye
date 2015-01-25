@@ -19,8 +19,11 @@
 #define LOCK_PROFILER() do { pthread_mutex_lock (&(profiler->mutex));} while (0)
 #define UNLOCK_PROFILER() do { pthread_mutex_unlock (&(profiler->mutex));} while (0)
 
+#define ENABLE_PROFILER() profiler->enabled = TRUE;
+#define DISABLE_PROFILER() profiler->enabled = FALSE;
+
 #define CHECK_PROFILER_ENABLED() do {\
-    if (! profiler->profiler_enabled)\
+    if (! profiler->enabled)\
         return;\
 } while (0)
 
@@ -170,9 +173,8 @@ struct _MonoProfiler {
     pthread_mutex_t mutex;
     int ncalls;
     int allocations;
-    gboolean profiler_enabled;
-    int pipe_fd;
-    FILE *file_fd;
+    gboolean enabled;
+    FILE *fd;
 };
 
 static char * get_fifo_name() {
@@ -189,7 +191,7 @@ open_named_pipe_for_output (MonoProfiler *profiler, char *pipe_name) {
         printf ("Could not open pipe, exiting");
         exit (1);
     }
-    profiler->pipe_fd = pipe;
+    profiler->fd = pipe;
 }
 
 static void
@@ -201,12 +203,12 @@ open_file_for_output (MonoProfiler *profiler, char *name) {
         perror ("error opening file, exiting");
         exit (1);
     }
-    profiler->file_fd = fd; 
+    profiler->fd = (FILE *) fd; 
 }
 
 static void 
 close_fifo (MonoProfiler *profiler) {
-    if(!close (profiler->pipe_fd)) {
+    if(!close (profiler->fd)) {
         perror ("couldn't close pipe");
         exit(1);
     }
@@ -215,38 +217,30 @@ close_fifo (MonoProfiler *profiler) {
 static void
 flush_buffer (MonoProfiler *profiler) {
     assert (profiler != NULL);
-    assert (profiler->pipe_fd > 0);
-    profiler->pipe_fd;
+    assert (profiler->fd > 0);
+    profiler->fd;
 }
 
-
-static void
-enable_profiler (MonoProfiler *profiler) {
-    profiler->profiler_enabled = TRUE;
-}
-
-static void
-disable_profiler (MonoProfiler *profiler) {
-    profiler->profiler_enabled = FALSE;
-}
-
-   
 static char *
 get_method_name(MonoProfiler *profiler, MonoMethod *method) {
+    UNLOCK_PROFILER();
     MonoClass *klass = mono_method_get_class (method);
     if(klass == NULL) return NULL;
     if(method == NULL) return NULL;
-    char *signature = (char*) mono_signature_get_desc (mono_method_signature (method), TRUE);
+    void *sig = mono_method_signature (method);
+    if(sig == NULL) { printf("WTF NULL"); exit(1);}
+    char *signature = mono_signature_get_desc (sig, TRUE);
     if(signature == NULL) return NULL; 
     const char *namespace = mono_class_get_namespace (klass);
     const char *klassname = mono_class_get_name (klass);
-    const char *methodname = mono_method_get_class (method);
+    char *methodname = mono_method_get_class (method);
     //g_free (signature);
     char *name = g_strdup_printf ("%s.%s:%s (%s)", 
                                  mono_class_get_namespace (klass), 
                                  mono_class_get_name (klass), 
                                  mono_method_get_name (method), 
                                  "test");
+    UNLOCK_PROFILER();
     return name; 
 }
 
@@ -264,7 +258,7 @@ pe_shutdown (MonoProfiler *profiler)
 {
     LOCK_PROFILER();
     mono_profiler_set_events (0);
-    close (profiler->file_fd);
+    close (profiler->fd);
     CHECK_PROFILER_ENABLED();
     printf("number of calls is %d\n", profiler->ncalls);
     printf("number of allocations is %d\n", profiler->allocations);
@@ -278,7 +272,7 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method)
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    fprintf(profiler->file_fd, "enter %lu %s\n", counter, name);
+    fprintf(profiler->fd, "enter %lu %s\n", counter, name);
     profiler->ncalls++;
 }
 
@@ -289,14 +283,14 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method)
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    fprintf(profiler->file_fd, "leave %lu %s\n", counter, name);
+    fprintf(profiler->fd, "leave %lu %s\n", counter, name);
 }
 
 static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
-    fprintf(profiler->file_fd,"allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
+    fprintf(profiler->fd,"allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
     profiler->allocations++;
 }
 
@@ -308,20 +302,20 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
         gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
-        //printf ("JIT completed %s\n", name);
+        printf ("JIT completed %s\n", name);
         g_free (name);
     }
 }
 
 static void
 pe_throw_callback (MonoProfiler *profiler, MonoObject *object) {
-    fprintf(profiler->file_fd, "exception thrown\n");
+    fprintf(profiler->fd, "exception thrown\n");
     CHECK_PROFILER_ENABLED();
 }
 
 static void 
 pe_clause_callback (MonoProfiler *profiler, MonoMethod *method, int clause_type, int clause_num) {
-    fprintf(profiler->file_fd, "clause call back\n");
+    fprintf(profiler->fd, "clause call back\n");
     CHECK_PROFILER_ENABLED();
 }
 
@@ -345,9 +339,8 @@ mono_profiler_startup (const char *desc)
 
     profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
 
-    profiler->profiler_enabled = TRUE;
     INITIALIZE_PROFILER_MUTEX();
-    
+    DISABLE_PROFILER();
     open_file_for_output (profiler, "foo.bin");
     mono_profiler_install (profiler, pe_shutdown);
     mono_profiler_install_enter_leave (pe_method_enter, pe_method_leave);
@@ -359,7 +352,6 @@ mono_profiler_startup (const char *desc)
                               MONO_PROFILE_JIT_COMPILATION | 
                               MONO_PROFILE_ALLOCATIONS | 
                               MONO_PROFILE_EXCEPTIONS);
-
-    enable_profiler (profiler);
+    ENABLE_PROFILER();
 }
 
