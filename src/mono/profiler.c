@@ -28,7 +28,6 @@
         return;\
 } while (0)
 
-#define INITIALIZE_PROFILER_MUTEX() pthread_mutex_init (&(profiler->mutex), NULL)
 #define DELETE_PROFILER_MUTEX() pthread_mutex_destroy (&(profiler->mutex))
 
 static char *START_OUTPUT_METHOD = "7A91E123-0BF7-4A17-AB35-D3879E65D032";
@@ -175,13 +174,11 @@ typedef struct _MethodIdMappingElement {
     MonoMethod *method;
 } MethodIdMappingElement;
 
-typedef struct _ClassIdMapping {
-    GHashTable *table;
-} ClassIdMapping;
-
-typedef struct _MethodIdMapping {
-    GHashTable *table;
-} MethodIdMapping;
+typedef struct _ClassIdMappingElement {
+    char *name;
+    guint32 id;
+    MonoClass *klass;
+} ClassIdMappingElement;
 
 /* MonoProfiler Opaque struct */
 struct _MonoProfiler {
@@ -189,7 +186,8 @@ struct _MonoProfiler {
     int ncalls;
     int allocations;
     gboolean enabled;
-    MethodIdMapping *sent_methods;
+    GHashTable *cached_methods;
+    GHashTable *cached_types;
     FILE *fd;
 };
 
@@ -238,24 +236,24 @@ flush_buffer (MonoProfiler *profiler) {
 }
 
 static MethodIdMappingElement*
-get_method_name(MonoMethod *method) {
-    return g_hash_table_lookup (profiler->sent-methods->table, (gconstpointer) method);
+get_method_name_cached(MonoProfiler *profiler, MonoMethod *method) {
+    return g_hash_table_lookup (profiler->cached_methods, (gconstpointer) method);
 }
 
 static ClassIdMappingElement*
-class_id_mapping_element_get (MonoClass *klass) {
-    return g_hash_table_lookup (profiler->sent-types->table, (gconstpointer) klass);
+class_id_mapping_element_get (MonoProfiler *profiler, MonoClass *klass) {
+    return g_hash_table_lookup (profiler->cached_types, (gconstpointer) klass);
 }
 
 static MethodIdMappingElement*
-method_id_mapping_element_new (MonoMethod *method) {
+method_id_mapping_element_new (MonoProfiler *profiler, MonoMethod *method) {
     MethodIdMappingElement *result = g_new (MethodIdMappingElement, 1);
     char *signature = mono_signature_get_desc (mono_method_signature (method), TRUE);
                 
     result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
     g_free (signature);
     result->method = method;
-    g_hash_table_insert (profiler->methods->table, method, result);
+    g_hash_table_insert (profiler->cached_methods, method, result);
 #if (DEBUG_MAPPING_EVENTS)
     printf ("Created new METHOD mapping element \"%s\" (%p)[%d]\n", result->name, method, result->id);
 #endif
@@ -277,34 +275,6 @@ class_id_mapping_element_destroy (gpointer element) {
     if (e->name)
          g_free (e->name);
     g_free (element);
-}
-
-static MethodIdMapping*
-method_id_mapping_new (void) {
-    MethodIdMapping *result = g_new (MethodIdMapping, 1);
-    result->table = g_hash_table_new_full (mono_aligned_addr_hash, NULL, NULL, method_id_mapping_element_destroy);
-    result->table = g_hash_table_new_full (g_direct_hash, NULL, NULL, method_id_mapping_element_destroy);
-    return result;
-}
-
-static ClassIdMapping*
-class_id_mapping_new (void) {
-    ClassIdMapping *result = g_new (ClassIdMapping, 1);
-    result->table = g_hash_table_new_full (mono_aligned_addr_hash, NULL, NULL, class_id_mapping_element_destroy);
-    result->table = g_hash_table_new_full (g_direct_hash, NULL, NULL, class_id_mapping_element_destroy);
-    return result;
-}
-
-static void
-method_id_mapping_destroy (MethodIdMapping *map) {
-    g_hash_table_destroy (map->table);
-    g_free (map);
-}
-
-static void
-class_id_mapping_destroy (ClassIdMapping *map) {
-     g_hash_table_destroy (map->table);
-     g_free (map);
 }
 
 static char *
@@ -332,7 +302,17 @@ get_method_name(MonoProfiler *profiler, MonoMethod *method) {
     return name; 
 }
 
+static MonoProfiler *
+init_mono_profiler () {
+    MonoProfiler *ret;
 
+    ret = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
+    ret->cached_methods = g_hash_table_new_full (g_direct_hash, NULL, NULL, method_id_mapping_element_destroy);
+    ret->cached_types = g_hash_table_new_full (g_direct_hash, NULL, NULL, class_id_mapping_element_destroy);
+    
+    pthread_mutex_init (&(ret->mutex), NULL);
+    return ret;
+}
 
 
 /**********************************************************************
@@ -358,7 +338,7 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    //fprintf(profiler->fd,"enter %lu %s\n", counter, name);
+    printf("enter %lu %s\n", counter, name);
     profiler->ncalls++;
     //g_free (name);
 }
@@ -369,7 +349,7 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    //fprintf(profiler->fd, "leave %lu %s\n", counter, name);
+    printf("leave %lu %s\n", counter, name);
     //g_free (name);
 }
 
@@ -377,7 +357,7 @@ static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
-    //fprintf(profiler->fd,"allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
+    printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
     profiler->allocations++;
 }
 
@@ -389,7 +369,7 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
         gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
-        printf ("JIT completed %s\n", name);
+        //printf ("JIT completed %s\n", name);
         g_free (name);
     }
 }
@@ -421,12 +401,11 @@ pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method) {
 void
 mono_profiler_startup (const char *desc) {
     MonoProfiler *profiler;
-
-    profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
-
-    INITIALIZE_PROFILER_MUTEX();
-    DISABLE_PROFILER();
+    
+    profiler = init_mono_profiler ();
+    
     open_file_for_output (profiler, "foo.bin");
+    
     mono_profiler_install (profiler, pe_shutdown);
     mono_profiler_install_enter_leave (pe_method_enter, pe_method_leave);
     mono_profiler_install_exception (pe_throw_callback, pe_exc_method_leave, pe_clause_callback);
@@ -437,6 +416,5 @@ mono_profiler_startup (const char *desc) {
                               MONO_PROFILE_JIT_COMPILATION | 
                               MONO_PROFILE_ALLOCATIONS | 
                               MONO_PROFILE_EXCEPTIONS);
-    ENABLE_PROFILER();
 }
 
