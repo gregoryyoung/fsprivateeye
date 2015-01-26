@@ -5,8 +5,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/time.h>
 #include <mono/metadata/profiler.h>
-
+#include <mono/metadata/debug-helpers.h>
 
 /*
  * Profiling backend for privateeye in mono. Uses the mono profiler api and
@@ -178,15 +179,15 @@ struct _MonoProfiler {
 };
 
 static char * get_fifo_name() {
-    
+    return "";    
 }
 
 static void 
 open_named_pipe_for_output (MonoProfiler *profiler, char *pipe_name) {
-    int pipe;
+    FILE *pipe;
 
     mkfifo (pipe_name, 0666);
-    pipe = openi (pipe_name, O_WRONLY);
+    pipe = (FILE *) fopen (pipe_name, "w");
     if(!pipe) {
         printf ("Could not open pipe, exiting");
         exit (1);
@@ -196,7 +197,7 @@ open_named_pipe_for_output (MonoProfiler *profiler, char *pipe_name) {
 
 static void
 open_file_for_output (MonoProfiler *profiler, char *name) {
-    int fd;
+    FILE *fd;
 
     fd = fopen ("file.txt", "w+");
     if(!fd) {
@@ -208,7 +209,7 @@ open_file_for_output (MonoProfiler *profiler, char *name) {
 
 static void 
 close_fifo (MonoProfiler *profiler) {
-    if(!close (profiler->fd)) {
+    if(!fclose (profiler->fd)) {
         perror ("couldn't close pipe");
         exit(1);
     }
@@ -218,30 +219,34 @@ static void
 flush_buffer (MonoProfiler *profiler) {
     assert (profiler != NULL);
     assert (profiler->fd > 0);
-    profiler->fd;
+    fflush (profiler->fd);
 }
 
 static char *
 get_method_name(MonoProfiler *profiler, MonoMethod *method) {
-    UNLOCK_PROFILER();
+    return "";
+    /*
     MonoClass *klass = mono_method_get_class (method);
     if(klass == NULL) return NULL;
     if(method == NULL) return NULL;
-    void *sig = mono_method_signature (method);
-    if(sig == NULL) { printf("WTF NULL"); exit(1);}
-    char *signature = mono_signature_get_desc (sig, TRUE);
+    MonoMethodSignature *sig = mono_method_signature (method);
+    if(sig == NULL) { printf("WTF NULL"); exit(1); }
+    char *signature = (char *) mono_signature_get_desc (sig, TRUE);
     if(signature == NULL) return NULL; 
-    const char *namespace = mono_class_get_namespace (klass);
-    const char *klassname = mono_class_get_name (klass);
-    char *methodname = mono_method_get_class (method);
-    //g_free (signature);
-    char *name = g_strdup_printf ("%s.%s:%s (%s)", 
+    void *returntype = mono_signature_get_return_type(sig);
+    if (!returntype) { printf("return type null\n");}
+    char *tname = mono_type_get_name(returntype);
+    if (tname == NULL) printf("tname is NULL");
+    char *name = g_strdup_printf ("%s %s.%s:%s (%s)", 
+                                 tname, 
                                  mono_class_get_namespace (klass), 
                                  mono_class_get_name (klass), 
                                  mono_method_get_name (method), 
-                                 "test");
-    UNLOCK_PROFILER();
+                                 signature);
+    g_free (signature);
+    g_free (tname);
     return name; 
+    */
 }
 
 
@@ -258,7 +263,7 @@ pe_shutdown (MonoProfiler *profiler)
 {
     LOCK_PROFILER();
     mono_profiler_set_events (0);
-    close (profiler->fd);
+    fclose (profiler->fd);
     CHECK_PROFILER_ENABLED();
     printf("number of calls is %d\n", profiler->ncalls);
     printf("number of allocations is %d\n", profiler->allocations);
@@ -268,12 +273,13 @@ pe_shutdown (MonoProfiler *profiler)
 static void
 pe_method_enter (MonoProfiler *profiler, MonoMethod *method)
 {
-    guint64 counter;
+    guint64 counter = 0;
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    fprintf(profiler->fd, "enter %lu %s\n", counter, name);
+    //fprintf(profiler->fd,"enter %lu %s\n", counter, name);
     profiler->ncalls++;
+    //g_free (name);
 }
 
 static void
@@ -283,14 +289,15 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method)
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    fprintf(profiler->fd, "leave %lu %s\n", counter, name);
+    //fprintf(profiler->fd, "leave %lu %s\n", counter, name);
+    //g_free (name);
 }
 
 static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
-    fprintf(profiler->fd,"allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
+    //fprintf(profiler->fd,"allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
     profiler->allocations++;
 }
 
@@ -298,12 +305,12 @@ static void
 pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* jinfo, int result) {
     CHECK_PROFILER_ENABLED();
     if (result == MONO_PROFILE_OK) {
-        char *name = get_method_name (profiler, method);
-        gpointer code_start = mono_jit_info_get_code_start (jinfo);
-        int code_size = mono_jit_info_get_code_size (jinfo);
-        if(name == NULL) return;
-        printf ("JIT completed %s\n", name);
-        g_free (name);
+        //char *name = get_method_name (profiler, method);
+        //gpointer code_start = mono_jit_info_get_code_start (jinfo);
+        //int code_size = mono_jit_info_get_code_size (jinfo);
+        //if(name == NULL) return;
+        //printf ("JIT completed %s\n", name);
+        //g_free (name);
     }
 }
 
@@ -327,8 +334,8 @@ pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method)
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name(profiler, method);
-    g_free (name);    
-    //printf("leave %lu %s\n", counter, name);
+    fprintf(profiler->fd, "leave %lu %s\n", counter, name);
+    //g_free (name);    
 }
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
