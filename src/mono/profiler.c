@@ -262,28 +262,6 @@ flush_buffer (MonoProfiler *profiler) {
     fflush (profiler->fd);
 }
 
-static ClassIdMappingElement*
-class_id_mapping_element_get (MonoProfiler *profiler, MonoClass *klass) {
-    return g_hash_table_lookup (profiler->cached_types, (gconstpointer) klass);
-}
-
-static MethodIdMappingElement*
-method_id_mapping_element_new (MonoProfiler *profiler, MonoMethod *method) {
-    MethodIdMappingElement *result = g_new (MethodIdMappingElement, 1);
-    char *signature = mono_signature_get_desc (mono_method_signature (method), TRUE);
-                
-    result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
-    g_free (signature);
-    result->method = method;
-    /*
-    printf ("inserting\n");
-    g_hash_table_insert (profiler->cached_methods, method, result);
-    printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
-    */
-    return result;
-}
-
-
 static void
 method_id_mapping_element_destroy (gpointer element) {
     MethodIdMappingElement *e = (MethodIdMappingElement*) element;
@@ -310,10 +288,16 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
         printf("returning cached %s\n", cached->name);
         return cached->name;
     }
-    MethodIdMappingElement *ret = method_id_mapping_element_new (profiler, method);
-    printf("wtf %s\n", ret->name);
+    MethodIdMappingElement *result = g_new (MethodIdMappingElement, 1);
+    char *signature = mono_signature_get_desc (mono_method_signature (method), TRUE);
+                
+    result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
+    g_free (signature);
+    result->method = method;
+    //g_hash_table_insert (profiler->cached_methods, method, result);
+    printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
     UNLOCK_PROFILER();
-    return ret->name;
+    return result->name;
 }
 
 
