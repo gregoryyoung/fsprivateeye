@@ -294,7 +294,7 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
     result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
     g_free (signature);
     result->method = method;
-    //g_hash_table_insert (profiler->cached_methods, method, result);
+    g_hash_table_insert (profiler->cached_methods, method, result);
     printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
     UNLOCK_PROFILER();
     return result->name;
@@ -362,8 +362,6 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
         gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
-        //printf ("JIT completed %s\n", name);
-        g_free (name);
     }
 }
 
@@ -387,7 +385,6 @@ pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
     fprintf(profiler->fd, "exc leave %lu %s\n", counter, name);
-    //g_free (name);    
 }
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
