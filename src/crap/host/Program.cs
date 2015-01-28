@@ -12,12 +12,12 @@ namespace host
             
         }
 
-        static void Start()
+        static void Stop()
         {
             
         }
 
-        static void Stop()
+        static void Start()
         {
             
         }
