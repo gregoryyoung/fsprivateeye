@@ -4,8 +4,6 @@
 #include "FunctionProfiler.h"
 #include "NativeCallback.h"
 
-#include <boost\algorithm\string.hpp>
-
 #define LIST_SIZE 32767
 
 #pragma pack(push)
@@ -94,6 +92,7 @@ HRESULT STDMETHODCALLTYPE CFunctionProfiler::Initialize(
         sizeof(ProfilerData)
         ); 
 
+	/*
     boost::split(m_excludes, profilerData->excludes, boost::is_any_of(L", "));
     m_excludes.remove_if(IsEmpty);
     m_excludes.push_front(L"System");
@@ -101,7 +100,7 @@ HRESULT STDMETHODCALLTYPE CFunctionProfiler::Initialize(
 
     boost::split(m_includes, profilerData->includes, boost::is_any_of(L", "));
     m_includes.remove_if(IsEmpty);
-
+	*/
     m_bufferSize = profilerData->bufferSize;
     m_thresholdSize = profilerData->thresholdSize;
 

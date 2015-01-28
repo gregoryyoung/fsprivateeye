@@ -60,7 +60,7 @@ namespace ProfilerHost.Profiler
                 filterAccessor.WriteArray(4 + 4, includes, 0, includes.Count());
                 filterAccessor.WriteArray(32768*2 + 4 + 4, excludes, 0, excludes.Count());
 
-                ThreadPool.QueueUserWorkItem((state) =>
+                ThreadPool.QueueUserWorkItem(state =>
                                                     {
                                                         try
                                                         {
