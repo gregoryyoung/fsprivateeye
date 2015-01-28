@@ -285,17 +285,35 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
     MethodIdMappingElement *cached = g_hash_table_lookup (profiler->cached_methods, (gconstpointer) method);
     if (cached != NULL) {
         UNLOCK_PROFILER();
-        printf("returning cached %s\n", cached->name);
         return cached->name;
     }
     MethodIdMappingElement *result = g_new (MethodIdMappingElement, 1);
-    char *signature = mono_signature_get_desc (mono_method_signature (method), TRUE);
+    char *signature = get_method_name (method);
                 
     result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
     g_free (signature);
     result->method = method;
     g_hash_table_insert (profiler->cached_methods, method, result);
     printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
+    UNLOCK_PROFILER();
+    return result->name;
+}
+
+
+static char *
+get_type_name_with_cache(MonoProfiler *profiler, MonoClass *klass) 
+{
+    LOCK_PROFILER();
+    ClassIdMappingElement *cached = g_hash_table_lookup (profiler->cached_types, (gconstpointer) klass);
+    if (cached != NULL) {
+        UNLOCK_PROFILER();
+        return cached->name;
+    }
+    ClassIdMappingElement *result = g_new (ClassIdMappingElement, 1);
+    result->name = g_strdup_printf("%s.%s", mono_class_get_namespace(klass), mono_class_get_name(klass));            
+    result->klass = klass;
+    g_hash_table_insert (profiler->cached_types, klass, result);
+    printf ("Created new CLASS mapping element \"%s\" (%p)\n", result->name, klass);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -350,7 +368,8 @@ static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
-    printf("allocate: %s.%s %d\n", mono_class_get_namespace (klass), mono_class_get_name (klass), size);
+    char *type_name = get_type_name_with_cache (profiler, klass);
+    //printf("allocate: %s %d\n", type_name, size);
     profiler->allocations++;
 }
 
