@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
+using System.Runtime.InteropServices;
 
 #if __MonoCS__ 
 using Mono.Unix.Native;
@@ -38,7 +39,8 @@ namespace host
             do {
                 r = (int) Syscall.read (handle.DangerousGetHandle().ToInt32(), p, (ulong) count);
             } while (UnixMarshal.ShouldRetrySyscall ((int) r));
-            if (r == EAGAIN) {
+            int errno = Marshal.GetLastWin32Error();
+            if (errno == EAGAIN) {
                 return 0;
             }
             return count;
