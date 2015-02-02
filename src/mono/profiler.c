@@ -429,7 +429,6 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    printf("in %s\n", name);
     fprintf (profiler->fd, "enter %s\n", name);
     profiler->ncalls++;
 }
