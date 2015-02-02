@@ -17,21 +17,13 @@
  *  */
 
 
-#define LOCK_PROFILER() do { pthread_mutex_lock (&(profiler->mutex));} while (0)
-#define UNLOCK_PROFILER() do { pthread_mutex_unlock (&(profiler->mutex));} while (0)
-
-#define CHECK_PROFILER_ENABLED() do {\
-    if (! profiler->enabled)\
-        return;\
-} while (0)
-
-#define INITIALIZE_PROFILER_MUTEX() pthread_mutex_init (&(profiler->mutex), NULL)
-#define DELETE_PROFILER_MUTEX() pthread_mutex_destroy (&(profiler->mutex))
 
 static char *START_OUTPUT_METHOD = "BA91E1230BF74A17AB35D3879E65D032";
-static char *END_OUTPUT_METHOD = "8BB1D222-103F-49FD-A93A-588E5BFE36B8";
-static char *FORCE_FLUSH_PROFILER_METHOD = "33E04260-B266-42F6-8FC7-44FD7D3BF881";
-
+static char *END_OUTPUT_METHOD = "D574BADA0B0547DA891E57551C978192";
+static char *FORCE_FLUSH_PROFILER_METHOD = "DE259A95ABCA4803A7731665B38DB33A";
+static char *ENTER_MATRYOSHKA_METHOD = "AC4A98BC81E94DADB71D1FABA30E0703";
+static char *LEAVE_MATRYOSHKA_METHOD = "BB8F606F50BD474293A734159ABA1D23";
+static int METHOD_LENGTH = 32;
 static char *FIFO_PREXIX = "PRIVATE_EYE";
 
 /* Time counting */
@@ -166,6 +158,52 @@ static void detect_fast_timer (void) {
 #define MONO_PROFILER_GET_CURRENT_COUNTER(c) MONO_PROFILER_GET_CURRENT_TIME ((c))
 #endif
 
+#ifndef HOST_WIN32
+#define LOCK_PROFILER() do { pthread_mutex_lock (&(profiler->mutex));} while (0)
+#define UNLOCK_PROFILER() do { pthread_mutex_unlock (&(profiler->mutex));} while (0)
+
+#define CHECK_PROFILER_ENABLED() do {\
+    if (! profiler->enabled)\
+        return;\
+} while (0)
+
+#define INITIALIZE_PROFILER_MUTEX() pthread_mutex_init (&(profiler->mutex), NULL)
+#define DELETE_PROFILER_MUTEX() pthread_mutex_destroy (&(profiler->mutex))
+
+static pthread_key_t pthread_profiler_key;
+static pthread_once_t profiler_pthread_once = PTHREAD_ONCE_INIT;
+static void
+make_pthread_profiler_key (void) {
+        (void) pthread_key_create (&pthread_profiler_key, NULL);
+}
+#define LOOKUP_PROFILER_THREAD_DATA() ((ProfilerPerThreadData*) pthread_getspecific (pthread_profiler_key))
+#define SET_PROFILER_THREAD_DATA(x) (void) pthread_setspecific (pthread_profiler_key, (x))
+#define ALLOCATE_PROFILER_THREAD_DATA() (void) pthread_once (&profiler_pthread_once, make_pthread_profiler_key)
+#define FREE_PROFILER_THREAD_DATA() (void) pthread_key_delete (pthread_profiler_key)
+#define CURRENT_THREAD_ID() (gsize) pthread_self ()
+#else
+//TODO handle windows specific? like anyone would actually use that!
+#endif
+
+#define GET_PROFILER_THREAD_DATA(data) do {\
+        ProfilerPerThreadData *_result = LOOKUP_PROFILER_THREAD_DATA ();\
+        if (!_result) {\
+                    printf("thread data not found, creating\n");\
+                    _result = g_new (ProfilerPerThreadData, 1);\
+                    _result->thread_id = CURRENT_THREAD_ID ();\
+                    _result->is_matryoshka = FALSE;\
+                    SET_PROFILER_THREAD_DATA (_result);\
+                }\
+        (data) = _result;\
+} while (0)
+
+#define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka) return 
+
+typedef struct _ProfilerPerThreadData {
+    gsize thread_id;
+    gboolean is_matryoshka;
+} ProfilerPerThreadData;
+
 typedef struct _MethodIdMappingElement {
     char *name;
     guint32 id;
@@ -220,19 +258,18 @@ static char * get_fifo_name() {
 }
 
 static void 
-open_named_pipe_for_output (MonoProfiler *profiler, char *pipe_name) {
+open_fifo_for_output (MonoProfiler *profiler, char *pipe_name) {
     FILE *pipe;
-    mkfifo (pipe_name, 0666);
-    printf ("mkfifo done!\n");
-    printf("opening\n");
-    int fifo_fd = open(pipe_name, O_WRONLY | O_NONBLOCK);
+    printf("opening from profiler %s\n", pipe_name);
+    int fifo_fd = open(pipe_name, O_WRONLY);
     printf("opened!\n");
-    FILE *fp = fdopen(fifo_fd, "r");
+    if (!fifo_fd) printf("error from os open\n");
+    FILE *fp = fdopen(fifo_fd, "w");
     if(!fp) {
-        printf ("Could not open pipe, exiting");
+        printf ("Could not open pipe, exiting\n");
         exit (1);
     }
-    printf("done opening fifo %s", pipe_name);
+    printf("done opening fifo %s in profiler", pipe_name);
     profiler->fd = fp;
 }
 
@@ -332,7 +369,7 @@ init_mono_profiler () {
 
 static void
 enable_profiler (MonoProfiler *profiler) {
-    open_file_for_output (profiler, "/tmp/test");
+    open_fifo_for_output (profiler, "/tmp/test");
     profiler->enabled = TRUE;
 }
 
@@ -344,12 +381,25 @@ disable_profiler (MonoProfiler *profiler) {
 }
 
 static void 
-try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method) {
-    if(strncmp(mono_method_get_name(method), START_OUTPUT_METHOD, strlen(START_OUTPUT_METHOD)) == 0) {
+try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method, ProfilerPerThreadData *thread_data) {
+    const char *name = mono_method_get_name (method);
+    if(strncmp(name, START_OUTPUT_METHOD, METHOD_LENGTH) == 0) {
         printf("enabling profiler\n");
         enable_profiler (profiler); 
+        return;
     } 
-    //check method name against constants for things like flush/reset
+
+    if(strncmp(name, ENTER_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
+        printf("enabling matryoshka\n");
+        thread_data->is_matryoshka = TRUE;
+        return;
+    } 
+    
+    if(strncmp(name, LEAVE_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
+        printf("disabling matryoshka\n");
+        thread_data->is_matryoshka = FALSE;
+        return;
+    } 
 }
 
 /**********************************************************************
@@ -370,8 +420,12 @@ pe_shutdown (MonoProfiler *profiler) {
 
 static void
 pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
+    ProfilerPerThreadData *thread_data;
     guint64 counter = 0;
-    try_parse_method_as_command(profiler, method);
+    
+    GET_PROFILER_THREAD_DATA (thread_data);
+    try_parse_method_as_command(profiler, method, thread_data);
+    LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
@@ -381,7 +435,11 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
 
 static void
 pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
+    ProfilerPerThreadData *thread_data;
     guint64 counter;
+
+    GET_PROFILER_THREAD_DATA (thread_data);
+    LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
@@ -390,10 +448,14 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
 
 static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
+    ProfilerPerThreadData *thread_data;
+
+    GET_PROFILER_THREAD_DATA (thread_data);
+    LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
     char *type_name = get_type_name_with_cache (profiler, klass);
-    //printf("allocate: %s %d\n", type_name, size);
+    fprintf(profiler->fd, "allocate: %s %d\n", type_name, size);
     profiler->allocations++;
 }
 
@@ -435,8 +497,11 @@ void
 mono_profiler_startup (const char *desc) {
     MonoProfiler *profiler;
 
+    ALLOCATE_PROFILER_THREAD_DATA();
+    
     profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
     printf("profiler loaded\n");
+
     profiler->cached_methods = g_hash_table_new_full (g_direct_hash, NULL, NULL, method_id_mapping_element_destroy);
     profiler->cached_types = g_hash_table_new_full (g_direct_hash, NULL, NULL, class_id_mapping_element_destroy);
     INITIALIZE_PROFILER_MUTEX();
