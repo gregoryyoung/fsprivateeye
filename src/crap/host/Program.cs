@@ -36,6 +36,12 @@ namespace host
 
         static void Main(string[] args)
         {
+            var t = new Thread(x => {
+                    while(true) {
+                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                    }
+                     });
+            t.Start();
             try {
                 var bullshit = Native.Read(null, new byte[0],0 ,0);
             }
@@ -55,14 +61,13 @@ namespace host
                 while(true) {
                     var buffer = new byte[4906];
                     int read = Native.Read(handle, buffer, 0, buffer.Length);
-                    Console.WriteLine("*********************** READ " + read);
                     if (read > 0)
                     {
                         Console.WriteLine(Encoding.ASCII.GetString(buffer, 0, read));
                     }
                     else
                     {
-                        Thread.Sleep(50);
+                        Thread.Sleep(1);
                     }
                 }
             }

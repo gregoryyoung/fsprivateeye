@@ -39,15 +39,18 @@ namespace host
             do {
                 r = (int) Syscall.read (handle.DangerousGetHandle().ToInt32(), p, (ulong) count);
             } while (UnixMarshal.ShouldRetrySyscall ((int) r));
-            int errno = Marshal.GetLastWin32Error();
-            if (errno == EAGAIN) {
-                return 0;
+            if(r == -1) {
+                int errno = Marshal.GetLastWin32Error();
+                if (errno == EAGAIN) {
+                    return 0;
+                }
+                throw new Win32Exception();
             }
-            return count;
-            }
+            return r;
 #else
             return 0;
 #endif
+            }
         }
     }
 }
