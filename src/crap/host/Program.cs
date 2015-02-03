@@ -38,7 +38,7 @@ namespace host
         {
             var t = new Thread(x => {
                     while(true) {
-                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        var b = new byte[300];
                     }
                      });
             t.Start();
@@ -58,12 +58,15 @@ namespace host
                 Console.WriteLine("file open, sending signal to start");
                 Console.WriteLine("*******************************************************************************************************************");
                 AC4A98BC81E94DADB71D1FABA30E0703();
+                int count = 0;
                 while(true) {
                     var buffer = new byte[4906];
                     int read = Native.Read(handle, buffer, 0, buffer.Length);
+                    
                     if (read > 0)
                     {
-                        Console.WriteLine(Encoding.ASCII.GetString(buffer, 0, read));
+                        count++;
+                        if(count % 5000 == 0) Console.Write(".");
                     }
                     else
                     {

@@ -16,8 +16,6 @@
  * TODO add more comments and stuff
  *  */
 
-
-
 static char *START_OUTPUT_METHOD = "BA91E1230BF74A17AB35D3879E65D032";
 static char *END_OUTPUT_METHOD = "D574BADA0B0547DA891E57551C978192";
 static char *FORCE_FLUSH_PROFILER_METHOD = "DE259A95ABCA4803A7731665B38DB33A";
@@ -197,7 +195,7 @@ make_pthread_profiler_key (void) {
         (data) = _result;\
 } while (0)
 
-#define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka) return 
+#define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka > 0) return 
 
 typedef struct _ProfilerPerThreadData {
     gsize thread_id;
@@ -333,6 +331,7 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
     result->method = method;
     g_hash_table_insert (profiler->cached_methods, method, result);
     printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
+    fprintf (profiler->fd, "M,%lu,%s", method, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -352,6 +351,7 @@ get_type_name_with_cache(MonoProfiler *profiler, MonoClass *klass)
     result->klass = klass;
     g_hash_table_insert (profiler->cached_types, klass, result);
     printf ("Created new CLASS mapping element \"%s\" (%p)\n", result->name, klass);
+    fprintf (profiler->fd, "T,%lu,%s", klass, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -391,13 +391,17 @@ try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method, Profile
 
     if(strncmp(name, ENTER_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
         printf("enabling matryoshka\n");
-        thread_data->is_matryoshka = TRUE;
+        thread_data->is_matryoshka++;
         return;
     } 
     
     if(strncmp(name, LEAVE_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
-        printf("disabling matryoshka\n");
-        thread_data->is_matryoshka = FALSE;
+        printf ("disabling matryoshka\n");
+        if (thread_data->is_matryoshka == 0) {
+            printf ("critical sections don't match.\n");
+            exit (3);
+        }
+        thread_data->is_matryoshka--;
         return;
     } 
 }
@@ -429,7 +433,7 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "enter %s\n", name);
+    fprintf (profiler->fd, "E,%lu\n", method);
     profiler->ncalls++;
 }
 
@@ -443,7 +447,7 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "leave %s\n", name);
+    fprintf (profiler->fd, "L,%lu\n", method);
 }
 
 static void
@@ -455,7 +459,7 @@ pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) 
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
     char *type_name = get_type_name_with_cache (profiler, klass);
-    fprintf(profiler->fd, "allocate: %s %d\n", type_name, size);
+    fprintf(profiler->fd, "A,%lu,%d\n", klass, size);
     profiler->allocations++;
 }
 
