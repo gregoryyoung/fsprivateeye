@@ -199,7 +199,7 @@ make_pthread_profiler_key (void) {
 #define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka > 0) return 
 
 typedef struct _ProfilerPerThreadData {
-    gsize thread_id;
+    guint32 thread_id;
     gboolean is_matryoshka;
 } ProfilerPerThreadData;
 
@@ -434,7 +434,7 @@ pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "E,%p\n", method);
+    fprintf (profiler->fd, "E,%lu,%d,%p\n", counter,thread_data->thread_id, method);
     profiler->ncalls++;
 }
 
@@ -448,19 +448,22 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "L,%p\n", method);
+    fprintf (profiler->fd, "L,%lu,%d,%p\n", counter, thread_data->thread_id, method);
 }
 
 static void
 pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
     ProfilerPerThreadData *thread_data;
+    guint64 counter;
 
     GET_PROFILER_THREAD_DATA (thread_data);
     LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
+    MONO_PROFILER_GET_CURRENT_COUNTER (counter);
+    
     guint size = mono_object_get_size (obj);
     char *type_name = get_type_name_with_cache (profiler, klass);
-    fprintf(profiler->fd, "A,%p,%d\n", klass, size);
+    fprintf(profiler->fd, "A,%lu,%p,%d\n", counter, klass, size);
     profiler->allocations++;
 }
 
@@ -469,7 +472,6 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
     CHECK_PROFILER_ENABLED();
     if (result == MONO_PROFILE_OK) {
         char *name = get_method_name_with_cache (profiler, method);
-        gpointer code_start = mono_jit_info_get_code_start (jinfo);
         int code_size = mono_jit_info_get_code_size (jinfo);
         if(name == NULL) return;
     }
@@ -501,6 +503,8 @@ pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method) {
 void
 mono_profiler_startup (const char *desc) {
     MonoProfiler *profiler;
+
+    detect_fast_timer ();
 
     ALLOCATE_PROFILER_THREAD_DATA();
     
