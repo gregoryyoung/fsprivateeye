@@ -49,10 +49,10 @@ namespace host
                 throw new Win32Exception();
             }
             return r;
+            }
 #else
             return 0;
 #endif
-            
         }
     }
 }
