@@ -1,7 +1,6 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
-using System.Text;
+
 namespace host
 {
     class Program
@@ -58,15 +57,20 @@ namespace host
                 Console.WriteLine("file open, sending signal to start");
                 Console.WriteLine("*******************************************************************************************************************");
                 AC4A98BC81E94DADB71D1FABA30E0703();
-                int count = 0;
+
+            var lastState = new ParserState() {LineRead = false, Position=0};
                 while(true) {
                     var buffer = new byte[4906];
-                    int read = Native.Read(handle, buffer, 0, buffer.Length);
-                    
+                    var read = Native.Read(handle, buffer, 0, buffer.Length);
                     if (read > 0)
                     {
-                        count++;
-                        if(count % 5000 == 0) Console.Write(".");
+                        var parsed = Parser.ReadNextLine(buffer, read, lastState);
+                        if (parsed.Item2.LineRead)
+                        {
+                            //process line
+                            Console.WriteLine("line read '{0}'", parsed.Item1);
+                        }
+                        lastState = parsed.Item2;
                     }
                     else
                     {

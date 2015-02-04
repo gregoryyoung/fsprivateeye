@@ -12,7 +12,9 @@ namespace host
 {
     public static unsafe class Native
     {
+#if __MonoCS__
         private static readonly int EAGAIN = NativeConvert.FromErrno(Errno.EAGAIN);
+#endif
         public static SafeFileHandle OpenPipeNonBlocking(string filename)
         {
 #if __MonoCS__
@@ -50,7 +52,7 @@ namespace host
 #else
             return 0;
 #endif
-            }
+            
         }
     }
 }
