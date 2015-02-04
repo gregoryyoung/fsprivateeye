@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <assert.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -331,7 +332,7 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
     result->method = method;
     g_hash_table_insert (profiler->cached_methods, method, result);
     printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
-    fprintf (profiler->fd, "M,%lu,%s", method, result->name);
+    fprintf (profiler->fd, "M,%p,%s", method, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -351,7 +352,7 @@ get_type_name_with_cache(MonoProfiler *profiler, MonoClass *klass)
     result->klass = klass;
     g_hash_table_insert (profiler->cached_types, klass, result);
     printf ("Created new CLASS mapping element \"%s\" (%p)\n", result->name, klass);
-    fprintf (profiler->fd, "T,%lu,%s", klass, result->name);
+    fprintf (profiler->fd, "T,%p,%s", klass, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -426,14 +427,14 @@ static void
 pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     ProfilerPerThreadData *thread_data;
     guint64 counter = 0;
-    
+    printf("enter!\n");    
     GET_PROFILER_THREAD_DATA (thread_data);
     try_parse_method_as_command(profiler, method, thread_data);
     LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "E,%lu\n", method);
+    fprintf (profiler->fd, "E,%p\n", method);
     profiler->ncalls++;
 }
 
@@ -447,7 +448,7 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "L,%lu\n", method);
+    fprintf (profiler->fd, "L,%p\n", method);
 }
 
 static void
@@ -459,7 +460,7 @@ pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) 
     CHECK_PROFILER_ENABLED();
     guint size = mono_object_get_size (obj);
     char *type_name = get_type_name_with_cache (profiler, klass);
-    fprintf(profiler->fd, "A,%lu,%d\n", klass, size);
+    fprintf(profiler->fd, "A,%p,%d\n", klass, size);
     profiler->allocations++;
 }
 
