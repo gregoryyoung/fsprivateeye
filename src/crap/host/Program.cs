@@ -38,14 +38,10 @@ namespace host
             var t = new Thread(x => {
                     while(true) {
                         var b = new byte[300];
+                        Thread.Sleep(1000);
                     }
                      });
             t.Start();
-            try {
-                var bullshit = Native.Read(null, new byte[0],0 ,0);
-            }
-            catch(Exception ex) {
-            }
             Console.WriteLine("starting");
                 var handle = Native.OpenPipeNonBlocking("/tmp/test");
                 Console.WriteLine("isinvalid = " + handle.IsInvalid);
@@ -58,17 +54,17 @@ namespace host
                 Console.WriteLine("*******************************************************************************************************************");
                 AC4A98BC81E94DADB71D1FABA30E0703();
 
-            var lastState = new ParserState() {LineRead = false, Position=0};
+                var lastState = new ParserState() {LineRead = false, Position=0};
                 while(true) {
                     var buffer = new byte[4906];
                     var read = Native.Read(handle, buffer, 0, buffer.Length);
                     if (read > 0)
                     {
                         var parsed = Parser.ReadNextLine(buffer, read, lastState);
-                        if (parsed.Item2.LineRead)
-                        {
-                            //process line
+                        while(parsed.Item2.LineRead) {
                             Console.WriteLine("line read '{0}'", parsed.Item1);
+                            lastState = parsed.Item2;
+                            parsed = Parser.ReadNextLine(buffer, read, parsed.Item2);
                         }
                         lastState = parsed.Item2;
                     }
