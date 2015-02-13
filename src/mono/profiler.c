@@ -204,7 +204,7 @@ make_pthread_profiler_key (void) {
         (data) = _result;\
 } while (0)
 
-#define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka > 0) return 
+#define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka > 0) return;
 
 #define DEBUG_PRINTF(fmt, ...) \
     do { if (DEBUG) fprintf(stderr, "PROFILER: %s:%d:%s(): " fmt, __FILE__, \
@@ -303,6 +303,7 @@ flush_buffer (MonoProfiler *profiler) {
 static void 
 write_event (MonoProfiler *profiler, char event_type, guint32 thread_id, guint64 counter, void *identifier) {
     fprintf (profiler->fd, "%c,%llu,%lu,%p\n", event_type, counter ,thread_id, identifier);
+    flush_buffer (profiler);
 }
 
 static void 

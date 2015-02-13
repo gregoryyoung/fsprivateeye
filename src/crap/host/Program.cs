@@ -38,7 +38,7 @@ namespace host
             var t = new Thread(x => {
                     while(true) {
                         var b = new byte[300];
-                        Thread.Sleep(100);
+                        Thread.Sleep(1000);
                     }
                      });
             t.Start();
@@ -58,9 +58,9 @@ namespace host
                 while(true) {
                     var buffer = new byte[4906];
                     var read = Native.Read(handle, buffer, 0, buffer.Length);
+                    Console.WriteLine("read " + read);
                     if (read > 0)
                     {
-                        Console.WriteLine("read " + read + " bytes");
                         var parsed = Parser.ReadNextLine(buffer, read, lastState);
                         while(parsed.Item2.LineRead) {
                             Console.WriteLine("line read '{0}'", parsed.Item1);
@@ -71,7 +71,7 @@ namespace host
                     }
                     else
                     {
-                        Thread.Sleep(1);
+                        Thread.Sleep(100);
                     }
                 }
             }
