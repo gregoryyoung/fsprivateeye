@@ -25,6 +25,14 @@ static char *LEAVE_MATRYOSHKA_METHOD = "BB8F606F50BD474293A734159ABA1D23";
 static int METHOD_LENGTH = 32;
 static char *FIFO_PREXIX = "PRIVATE_EYE";
 
+static char EVENT_ALLOCATION = 'A';
+static char EVENT_LEAVE = 'L';
+static char EVENT_ENTER = 'E';
+static char DEFINITION_TYPE = 'T';
+static char DEFINITION_METHOD = 'M';
+
+#define DEBUG TRUE 
+
 /* Time counting */
 #define MONO_PROFILER_GET_CURRENT_TIME(t) {\
         struct timeval current_time;\
@@ -40,7 +48,7 @@ static gboolean use_fast_timer = FALSE;
 static const guchar cpuid_impl [] = {
         0x55,                       /* push   %ebp */
         0x89, 0xe5,                 /* mov    %esp,%ebp */
-        0x53,                       /* push   %ebx */
+        0x53                       /* push   %ebx */
         0x8b, 0x45, 0x08,           /* mov    0x8(%ebp),%eax */
         0x0f, 0xa2,                 /* cpuid   */
         0x50,                       /* push   %eax */
@@ -198,6 +206,10 @@ make_pthread_profiler_key (void) {
 
 #define LEAVE_IF_MATRYOSHKA() if(thread_data->is_matryoshka > 0) return 
 
+#define DEBUG_PRINTF(fmt, ...) \
+    do { if (DEBUG) fprintf(stderr, "PROFILER: %s:%d:%s(): " fmt, __FILE__, \
+            __LINE__, __func__, __VA_ARGS__); } while (0)
+
 typedef struct _ProfilerPerThreadData {
     guint32 thread_id;
     gboolean is_matryoshka;
@@ -215,7 +227,6 @@ typedef struct _ClassIdMappingElement {
     MonoClass *klass;
 } ClassIdMappingElement;
 
-/* MonoProfiler Opaque struct */
 struct _MonoProfiler {
     pthread_mutex_t mutex;
     int ncalls;
@@ -228,18 +239,11 @@ struct _MonoProfiler {
 
 static char *
 get_method_name(MonoMethod *method) {
-    //TODO FIX ME
     MonoClass *klass = mono_method_get_class (method);
-    if(klass == NULL) return NULL;
-    if(method == NULL) return NULL;
     MonoMethodSignature *sig = mono_method_signature (method);
-    if(sig == NULL) { printf("WTF NULL"); exit(1); }
     char *signature = (char *) mono_signature_get_desc (sig, TRUE);
-    if(signature == NULL) return NULL; 
     void *returntype = mono_signature_get_return_type(sig);
-    if (!returntype) { printf("return type null\n");}
     char *tname = mono_type_get_name(returntype);
-    if (tname == NULL) printf("tname is NULL");
     char *name = g_strdup_printf ("%s %s.%s:%s (%s)", 
                                  tname, 
                                  mono_class_get_namespace (klass), 
@@ -259,16 +263,13 @@ static char * get_fifo_name() {
 static void 
 open_fifo_for_output (MonoProfiler *profiler, char *pipe_name) {
     FILE *pipe;
-    printf("opening from profiler %s\n", pipe_name);
     int fifo_fd = open(pipe_name, O_WRONLY);
-    printf("opened!\n");
     if (!fifo_fd) printf("error from os open\n");
     FILE *fp = fdopen(fifo_fd, "w");
     if(!fp) {
         printf ("Could not open pipe, exiting\n");
         exit (1);
     }
-    printf("done opening fifo %s in profiler", pipe_name);
     profiler->fd = fp;
 }
 
@@ -299,6 +300,16 @@ flush_buffer (MonoProfiler *profiler) {
     fflush (profiler->fd);
 }
 
+static void 
+write_event (MonoProfiler *profiler, char event_type, guint32 thread_id, guint64 counter, void *identifier) {
+    fprintf (profiler->fd, "%c,%llu,%lu,%p\n", event_type, counter ,thread_id, identifier);
+}
+
+static void 
+write_definition (MonoProfiler *profiler, char event_type, void *identifier, char *name) {
+    fprintf (profiler->fd, "%c,%p,%s\n", event_type, identifier, name);
+}
+
 static void
 method_id_mapping_element_destroy (gpointer element) {
     MethodIdMappingElement *e = (MethodIdMappingElement*) element;
@@ -326,13 +337,11 @@ get_method_name_with_cache(MonoProfiler *profiler, MonoMethod *method)
     }
     MethodIdMappingElement *result = g_new (MethodIdMappingElement, 1);
     char *signature = get_method_name (method);
-                
-    result->name = g_strdup_printf ("%s (%s)", mono_method_get_name (method), signature);
-    g_free (signature);
+    result->name = signature;            
     result->method = method;
     g_hash_table_insert (profiler->cached_methods, method, result);
-    printf ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
-    fprintf (profiler->fd, "M,%p,%s\n", method, result->name);
+    DEBUG_PRINTF ("Created new METHOD mapping element \"%s\" (%p)\n", result->name, method);
+    write_definition (profiler, DEFINITION_METHOD, method, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -351,8 +360,8 @@ get_type_name_with_cache(MonoProfiler *profiler, MonoClass *klass)
     result->name = g_strdup_printf("%s.%s", mono_class_get_namespace(klass), mono_class_get_name(klass));            
     result->klass = klass;
     g_hash_table_insert (profiler->cached_types, klass, result);
-    printf ("Created new CLASS mapping element \"%s\" (%p)\n", result->name, klass);
-    fprintf (profiler->fd, "T,%p,%s\n", klass, result->name);
+    DEBUG_PRINTF ("Created new CLASS mapping element \"%s\" (%p)\n", result->name, klass);
+    write_definition (profiler, DEFINITION_TYPE, klass, result->name);
     UNLOCK_PROFILER();
     return result->name;
 }
@@ -385,13 +394,13 @@ static void
 try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method, ProfilerPerThreadData *thread_data) {
     const char *name = mono_method_get_name (method);
     if(strncmp(name, START_OUTPUT_METHOD, METHOD_LENGTH) == 0) {
-        printf("enabling profiler\n");
+        DEBUG_PRINTF ("enabling profiler%d\n", thread_data->thread_id);
         enable_profiler (profiler); 
         return;
     } 
 
     if(strncmp(name, ENTER_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
-        printf("enabling matryoshka\n");
+        DEBUG_PRINTF("enabling matryoshka %d\n", thread_data->thread_id);
         thread_data->is_matryoshka++;
         return;
     } 
@@ -427,13 +436,15 @@ static void
 pe_method_enter (MonoProfiler *profiler, MonoMethod *method) {
     ProfilerPerThreadData *thread_data;
     guint64 counter = 0;
+
     GET_PROFILER_THREAD_DATA (thread_data);
     try_parse_method_as_command(profiler, method, thread_data);
     LEAVE_IF_MATRYOSHKA();
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "E,%lu,%d,%p\n", counter,thread_data->thread_id, method);
+    DEBUG_PRINTF ("enter %s\n", name);
+    write_event(profiler, EVENT_ENTER, thread_data->thread_id, counter, method);
     profiler->ncalls++;
 }
 
@@ -447,7 +458,8 @@ pe_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    fprintf (profiler->fd, "L,%lu,%d,%p\n", counter, thread_data->thread_id, method);
+    //DEBUG_PRINTF ("leave %s\n", name);
+    write_event(profiler, EVENT_LEAVE, thread_data->thread_id, counter, method);
 }
 
 static void
@@ -462,7 +474,7 @@ pe_object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) 
     
     guint size = mono_object_get_size (obj);
     char *type_name = get_type_name_with_cache (profiler, klass);
-    fprintf(profiler->fd, "A,%lu,%p,%d\n", counter, klass, size);
+    write_event(profiler, EVENT_ALLOCATION, thread_data->thread_id, counter, klass);
     profiler->allocations++;
 }
 
@@ -478,7 +490,6 @@ pe_method_jit_result (MonoProfiler *profiler, MonoMethod *method, MonoJitInfo* j
 
 static void
 pe_throw_callback (MonoProfiler *profiler, MonoObject *object) {
-    //fprintf(profiler->fd, "exception thrown\n");
     CHECK_PROFILER_ENABLED();
 }
 
@@ -495,7 +506,6 @@ pe_exc_method_leave (MonoProfiler *profiler, MonoMethod *method) {
     CHECK_PROFILER_ENABLED();
     MONO_PROFILER_GET_CURRENT_COUNTER (counter);
     char *name = get_method_name_with_cache(profiler, method);
-    //fprintf(profiler->fd, "exc leave %lu %s\n", counter, name);
 }
 
 /* The main entry point of profiler (called back from mono, defined in profile.h)*/
@@ -506,14 +516,13 @@ mono_profiler_startup (const char *desc) {
     detect_fast_timer ();
 
     ALLOCATE_PROFILER_THREAD_DATA();
-    
+     
     profiler = (MonoProfiler *) malloc(sizeof(MonoProfiler)); 
-    printf("profiler loaded\n");
 
     profiler->cached_methods = g_hash_table_new_full (g_direct_hash, NULL, NULL, method_id_mapping_element_destroy);
     profiler->cached_types = g_hash_table_new_full (g_direct_hash, NULL, NULL, class_id_mapping_element_destroy);
+    profiler->enabled = FALSE;
     INITIALIZE_PROFILER_MUTEX();
-    
     mono_profiler_install (profiler, pe_shutdown);
     mono_profiler_install_enter_leave (pe_method_enter, pe_method_leave);
     mono_profiler_install_exception (pe_throw_callback, pe_exc_method_leave, pe_clause_callback);
