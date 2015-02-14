@@ -302,8 +302,7 @@ flush_buffer (MonoProfiler *profiler) {
 
 static void 
 write_event (MonoProfiler *profiler, char event_type, guint32 thread_id, guint64 counter, void *identifier) {
-    fprintf (profiler->fd, "%c,%llu,%lu,%p\n", event_type, counter ,thread_id, identifier);
-    flush_buffer (profiler);
+    fprintf (profiler->fd, "%c,%" G_GUINT64_FORMAT ",%" G_GUINT32_FORMAT ",%p\n", event_type, counter ,thread_id, identifier);
 }
 
 static void 
@@ -407,7 +406,7 @@ try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method, Profile
     } 
     
     if(strncmp(name, LEAVE_MATRYOSHKA_METHOD, METHOD_LENGTH) == 0) {
-        printf ("disabling matryoshka\n");
+        DEBUG_PRINTF ("disabling matryoshka %d\n", thread_data->thread_id);
         if (thread_data->is_matryoshka == 0) {
             printf ("critical sections don't match.\n");
             exit (3);
@@ -415,6 +414,12 @@ try_parse_method_as_command (MonoProfiler *profiler, MonoMethod *method, Profile
         thread_data->is_matryoshka--;
         return;
     } 
+
+    if(strncmp(name, FORCE_FLUSH_PROFILER_METHOD, METHOD_LENGTH) == 0) {
+        DEBUG_PRINTF("forcing flush %d\n", thread_data->thread_id);
+        flush_buffer (profiler);
+        return;
+    }
 }
 
 /**********************************************************************

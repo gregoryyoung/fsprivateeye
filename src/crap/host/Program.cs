@@ -1,31 +1,32 @@
 ﻿using System;
 using System.Threading;
+using System.Runtime.CompilerServices;
 
 namespace host
 {
     class Program
     {
 
-        static void Flush()
-        {
-            
-        }
-
+        [MethodImpl(MethodImplOptions.NoInlining)]
         static void BA91E1230BF74A17AB35D3879E65D032()
         {
-           Console.WriteLine("*******************************************************************************************************************");
            //starts profiling. 
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         static void BB8F606F50BD474293A734159ABA1D23() 
         {
-            Console.WriteLine("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
             //leave matryoshka
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         static void AC4A98BC81E94DADB71D1FABA30E0703() {
-            Console.WriteLine("###################################################################################################################");
             //enter matryoshka
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void DE259A95ABCA4803A7731665B38DB33A() {
+            //force a flush
         }
 
         static void Start()
@@ -39,6 +40,7 @@ namespace host
                     while(true) {
                         var b = new byte[300];
                         Thread.Sleep(1000);
+                        DE259A95ABCA4803A7731665B38DB33A();
                     }
                      });
             t.Start();
