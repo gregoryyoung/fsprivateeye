@@ -302,12 +302,12 @@ flush_buffer (MonoProfiler *profiler) {
 
 static void 
 write_event (MonoProfiler *profiler, char event_type, guint32 thread_id, guint64 counter, void *identifier) {
-    fprintf (profiler->fd, "%c,%" G_GUINT64_FORMAT ",%" G_GUINT32_FORMAT ",%p\n", event_type, counter ,thread_id, identifier);
+    fprintf (profiler->fd, "%c,%" G_GUINT64_FORMAT ",%" G_GUINT32_FORMAT ",%lu\n", event_type, counter ,thread_id, (unsigned long)identifier);
 }
 
 static void 
 write_definition (MonoProfiler *profiler, char event_type, void *identifier, char *name) {
-    fprintf (profiler->fd, "%c,%p,%s\n", event_type, identifier, name);
+    fprintf (profiler->fd, "%c,%lu,%s\n", event_type, (unsigned long) identifier, name);
 }
 
 static void
