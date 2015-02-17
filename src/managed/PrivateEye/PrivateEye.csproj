@@ -48,6 +48,9 @@
     </When>
   </Choose>
   <ItemGroup>
+    <Compile Include="ClassDefinition.cs" />
+    <Compile Include="EventArgs.cs" />
+    <Compile Include="MethodDefinition.cs" />
     <Compile Include="Native.cs" />
     <Compile Include="Parser.cs" />
     <Compile Include="Profiler.cs" />

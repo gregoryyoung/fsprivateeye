@@ -19,6 +19,32 @@ namespace PrivateEye
             var left = Encoding.ASCII.GetString(buffer, state.Position, length - state.Position);
             return new Tuple<string, ParserState>("", new ParserState { Buffer = left, LineRead = false, Position = 0 });
         }
+
+        public static Tuple<ulong, int> ReadULong(string line, int start)
+        {
+            ulong ret = 0;
+            for (var i = start; i < line.Length; i++)
+            {
+                if (line[i] == ',' || line[i] == '\n')
+                {
+                    return new Tuple<ulong, int>(ret, i+1);
+                }
+                ret = ret * 10 + line[i] - '0';
+            }
+            throw new Exception("end of buffer reached without termination");
+        }
+
+        public static Tuple<string, int> ReadString(string line, int start)
+        {
+            for (var i = start; i < line.Length; i++)
+            {
+                if (line[i] == ',' || line[i] == '\n')
+                {
+                    return new Tuple<string, int>(line.Substring(start, i - start), i+1);
+                }
+            }
+            throw new Exception("end of buffer reached without termination");
+        }
     }
 
     struct ParserState
