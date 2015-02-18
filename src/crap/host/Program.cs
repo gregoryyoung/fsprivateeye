@@ -43,8 +43,8 @@ namespace host
                         DE259A95ABCA4803A7731665B38DB33A();
                     }
                      });
-            t.Start();
-            Console.WriteLine("starting");
+                t.Start();
+                Console.WriteLine("starting");
                 var handle = Native.OpenPipeNonBlocking("/tmp/test");
                 Console.WriteLine("isinvalid = " + handle.IsInvalid);
                 Console.WriteLine("calling start");

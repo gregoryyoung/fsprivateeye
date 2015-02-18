@@ -109,10 +109,11 @@ namespace PrivateEye
                     //leave
                     break;
                 case 'T':
-                    //type definition
+                    //type definition                    
                     var data = ReadDefinition(line);
-                    _classDefinitions.AddOrUpdate(data.Identifier,
-                        new ClassDefinition()
+                    Console.WriteLine("Type definition. " + data.Name);
+                    _classDefinitions.TryAdd(data.Identifier,
+                        new ClassDefinition
                         {
                             ModuleId = 1,
                             Name = data.Name,
@@ -122,6 +123,18 @@ namespace PrivateEye
                     break;
                 case 'M':
                     //method definition
+                    //TODO hook method definition
+                    var mdata = ReadDefinition(line);
+                    Console.WriteLine("Method definition. " + mdata.Name);
+                    _methodDefinitions.TryAdd(mdata.Identifier,
+                        new MethodDefinition
+                        {
+                            ModuleId = 1,
+                            Name = mdata.Name,
+                            Token = 0,
+                            MethodInfo = null
+                        });
+
                     break;
 
             }

@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.21005.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrivateEye", "PrivateEye.csproj", "{BEE13DEA-CCD6-405C-88ED-2D908FD961C7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApp", "..\TestApp\TestApp.csproj", "{F004A589-BB83-46E3-B28D-B5B39CB6AA03}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{BEE13DEA-CCD6-405C-88ED-2D908FD961C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BEE13DEA-CCD6-405C-88ED-2D908FD961C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BEE13DEA-CCD6-405C-88ED-2D908FD961C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F004A589-BB83-46E3-B28D-B5B39CB6AA03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F004A589-BB83-46E3-B28D-B5B39CB6AA03}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F004A589-BB83-46E3-B28D-B5B39CB6AA03}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F004A589-BB83-46E3-B28D-B5B39CB6AA03}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
