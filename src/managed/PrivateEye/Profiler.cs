@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
@@ -17,6 +18,9 @@ namespace PrivateEye
         public static event AllocatedDelegate OnAllocation;
 
         private static Thread _thread;
+        private static readonly ConcurrentDictionary<ulong, ClassDefinition> _classDefinitions = new ConcurrentDictionary<ulong, ClassDefinition>();
+        private static ConcurrentDictionary<ulong, MethodDefinition> _methodDefinitions = new ConcurrentDictionary<ulong, MethodDefinition>(); 
+
 
         private static void OnJitOccurred(JitOccured data)
         {
@@ -73,12 +77,12 @@ namespace PrivateEye
                 Console.WriteLine("read " + read);
                 if (read > 0)
                 {
-                    var parsed = Parser.ReadNextLine(buffer, read, lastState);
+                    var parsed = StringParsing.ReadNextLine(buffer, read, lastState);
                     while (parsed.Item2.LineRead)
                     {
                         Console.WriteLine("line read '{0}'", parsed.Item1);
-                        parsed = Parser.ReadNextLine(buffer, read, parsed.Item2);
-                        //process.
+                        parsed = StringParsing.ReadNextLine(buffer, read, parsed.Item2);
+                        ProcessLine(parsed.Item1);
                     }
                     lastState = parsed.Item2;
                 }
@@ -89,6 +93,47 @@ namespace PrivateEye
             }
 
         }
+
+        private static void ProcessLine(string line)
+        {
+            if (line.Length == 0) return;
+            switch (line[0])
+            {
+                case 'A':
+                    //allocation
+                    break;
+                case 'E':
+                    //enter
+                    break;
+                case 'L':
+                    //leave
+                    break;
+                case 'T':
+                    //type definition
+                    var data = ReadDefinition(line);
+                    _classDefinitions.AddOrUpdate(data.Identifier,
+                        new ClassDefinition()
+                        {
+                            ModuleId = 1,
+                            Name = data.Name,
+                            Token = 0,
+                            Type = Type.GetType(data.Name)
+                        });
+                    break;
+                case 'M':
+                    //method definition
+                    break;
+
+            }
+        }
+
+        private static DefinitionData ReadDefinition(string line)
+        {
+            var res = StringParsing.ReadULong(line, 2);
+            var res2 = StringParsing.ReadString(line, res.Item2);
+            return new DefinitionData() {Identifier = res.Item1, Name = res2.Item1};
+        }
+
         //command helpers
         static void StartProfiling() { BA91E1230BF74A17AB35D3879E65D032();}
         static void LeaveMatryoshka() { BB8F606F50BD474293A734159ABA1D23();}
@@ -121,6 +166,12 @@ namespace PrivateEye
         }
 
         #endregion
+    }
+
+    struct DefinitionData
+    {
+        public string Name;
+        public ulong Identifier;
     }
 
     public delegate void AllocatedDelegate(ObjectAllocated data);

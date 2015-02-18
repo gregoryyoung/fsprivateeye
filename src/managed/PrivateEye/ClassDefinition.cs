@@ -1,10 +1,10 @@
-﻿using System.Reflection;
+﻿using System;
 
 namespace PrivateEye
 {
     public class ClassDefinition
     {
-        public TypeInfo TypeInfo;
+        public Type Type;
         public string Name;
         internal uint ModuleId;
         internal uint Token;

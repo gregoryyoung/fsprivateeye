@@ -52,7 +52,7 @@
     <Compile Include="EventArgs.cs" />
     <Compile Include="MethodDefinition.cs" />
     <Compile Include="Native.cs" />
-    <Compile Include="Parser.cs" />
+    <Compile Include="StringParsing.cs" />
     <Compile Include="Profiler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

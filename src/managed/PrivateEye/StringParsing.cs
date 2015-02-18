@@ -3,7 +3,7 @@ using System.Text;
 
 namespace PrivateEye
 {
-    static class Parser
+    static class StringParsing
     {
         //TODO move to binary protocol? This is likely fast enough and is easily readble through files etc
         public static Tuple<string, ParserState> ReadNextLine(byte[] buffer, int length, ParserState state)
