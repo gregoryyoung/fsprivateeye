@@ -31,7 +31,7 @@ namespace PrivateEye
                 }
                 ret = ret * 10 + line[i] - '0';
             }
-            throw new Exception("end of buffer reached without termination");
+            return new Tuple<ulong, int>(ret, line.Length);
         }
 
         public static Tuple<string, int> ReadString(string line, int start)
