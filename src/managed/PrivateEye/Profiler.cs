@@ -19,7 +19,7 @@ namespace PrivateEye
 
         private static Thread _thread;
         private static readonly ConcurrentDictionary<ulong, ClassDefinition> _classDefinitions = new ConcurrentDictionary<ulong, ClassDefinition>();
-        private static ConcurrentDictionary<ulong, MethodDefinition> _methodDefinitions = new ConcurrentDictionary<ulong, MethodDefinition>(); 
+        private static readonly ConcurrentDictionary<ulong, MethodDefinition> _methodDefinitions = new ConcurrentDictionary<ulong, MethodDefinition>(); 
 
 
         private static void OnJitOccurred(JitOccured data)
@@ -101,6 +101,8 @@ namespace PrivateEye
                     //allocation
                     break;
                 case 'E':
+                    var enter = ReadEvent(line);
+                    Console.WriteLine("Enter " + enter.Identifier);
                     //enter
                     break;
                 case 'L':
@@ -146,6 +148,15 @@ namespace PrivateEye
             return new DefinitionData() {Identifier = res.Item1, Name = res2.Item1};
         }
 
+        private static EventData ReadEvent(string line)
+        {
+            Console.WriteLine("reading definition of " + line);
+            var res = StringParsing.ReadULong(line, 2);
+            var res2 = StringParsing.ReadULong(line, res.Item2);
+            var res3 = StringParsing.ReadULong(line, res2.Item2);
+            return new EventData() {Identifier = res3.Item1, Thread= (uint)res2.Item1, Time = res.Item1};
+        }
+
         //command helpers
         static void StartProfiling() { BA91E1230BF74A17AB35D3879E65D032();}
         static void LeaveMatryoshka() { BB8F606F50BD474293A734159ABA1D23();}
@@ -183,6 +194,13 @@ namespace PrivateEye
     struct DefinitionData
     {
         public string Name;
+        public ulong Identifier;
+    }
+
+    struct EventData
+    {
+        public ulong Time;
+        public UInt32 Thread;
         public ulong Identifier;
     }
 

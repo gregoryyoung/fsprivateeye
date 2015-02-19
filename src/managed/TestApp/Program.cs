@@ -12,7 +12,6 @@ namespace TestApp
             Console.WriteLine("Enabling profiler.");
             Profiler.Start();
             Profiler.EnableProfiler();
-            
         }
     }
 }
