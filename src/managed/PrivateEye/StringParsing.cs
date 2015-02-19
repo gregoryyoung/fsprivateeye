@@ -36,14 +36,7 @@ namespace PrivateEye
 
         public static Tuple<string, int> ReadString(string line, int start)
         {
-            for (var i = start; i < line.Length; i++)
-            {
-                if (line[i] == ',' || line[i] == '\n')
-                {
-                    return new Tuple<string, int>(line.Substring(start, i - start), i+1);
-                }
-            }
-            throw new Exception("end of buffer reached without termination");
+            return new Tuple<string, int>(line.Substring(start, line.Length - start), line.Length);
         }
     }
 

@@ -74,13 +74,11 @@ namespace PrivateEye
             while (true)
             {
                 var read = Native.Read(handle, buffer, 0, buffer.Length);
-                Console.WriteLine("read " + read);
                 if (read > 0)
                 {
                     var parsed = StringParsing.ReadNextLine(buffer, read, lastState);
                     while (parsed.Item2.LineRead)
                     {
-                        Console.WriteLine("line read '{0}'", parsed.Item1);
                         parsed = StringParsing.ReadNextLine(buffer, read, parsed.Item2);
                         ProcessLine(parsed.Item1);
                     }
@@ -142,6 +140,7 @@ namespace PrivateEye
 
         private static DefinitionData ReadDefinition(string line)
         {
+            Console.WriteLine("reading definition of " + line);
             var res = StringParsing.ReadULong(line, 2);
             var res2 = StringParsing.ReadString(line, res.Item2);
             return new DefinitionData() {Identifier = res.Item1, Name = res2.Item1};

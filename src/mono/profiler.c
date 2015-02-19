@@ -31,7 +31,7 @@ static char EVENT_ENTER = 'E';
 static char DEFINITION_TYPE = 'T';
 static char DEFINITION_METHOD = 'M';
 
-#define DEBUG TRUE 
+#define DEBUG FALSE 
 
 /* Time counting */
 #define MONO_PROFILER_GET_CURRENT_TIME(t) {\
