@@ -102,7 +102,10 @@ namespace PrivateEye
                     break;
                 case 'E':
                     var enter = ReadEvent(line);
-                    Console.WriteLine("Enter " + enter.Identifier);
+                    MethodDefinition methoddef;
+                    _methodDefinitions.TryGetValue(enter.Identifier, out methoddef);
+                    if(methoddef != null)
+                        Console.WriteLine("Enter " + methoddef.Name);
                     //enter
                     break;
                 case 'L':
