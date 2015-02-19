@@ -105,7 +105,7 @@ namespace PrivateEye
                     MethodDefinition methoddef;
                     _methodDefinitions.TryGetValue(enter.Identifier, out methoddef);
                     if(methoddef != null)
-                        OnOnMethodCalled(new MethodCalled(null, enter.Time));
+                        OnOnMethodCalled(new MethodCalled(null, enter.Time, methoddef.Name));
                     //enter
                     break;
                 case 'L':

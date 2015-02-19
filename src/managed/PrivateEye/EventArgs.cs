@@ -12,12 +12,14 @@ namespace PrivateEye
     public class MethodCalled
     {
         public readonly MethodDefinition Method;
+        public readonly string Name;
         public readonly ulong Time;
 
-        public MethodCalled(MethodDefinition method, ulong time)
+        public MethodCalled(MethodDefinition method, ulong time, string name)
         {
             Method = method;
             Time = time;
+            Name = name;
         }
     }
 
