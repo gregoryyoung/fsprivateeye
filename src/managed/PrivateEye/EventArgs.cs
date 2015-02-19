@@ -12,16 +12,12 @@ namespace PrivateEye
     public class MethodCalled
     {
         public readonly MethodDefinition Method;
-        public readonly long Time;
-        public readonly int AllocationCount;
-        public readonly int AllocationSize;
+        public readonly ulong Time;
 
-        public MethodCalled(MethodDefinition method, long time, int allocationCount, int allocationSize)
+        public MethodCalled(MethodDefinition method, ulong time)
         {
             Method = method;
             Time = time;
-            AllocationCount = allocationCount;
-            AllocationSize = allocationSize;
         }
     }
 

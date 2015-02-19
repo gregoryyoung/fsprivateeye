@@ -105,7 +105,7 @@ namespace PrivateEye
                     MethodDefinition methoddef;
                     _methodDefinitions.TryGetValue(enter.Identifier, out methoddef);
                     if(methoddef != null)
-                        Console.WriteLine("Enter " + methoddef.Name);
+                        OnOnMethodCalled(new MethodCalled(null, enter.Time));
                     //enter
                     break;
                 case 'L':
@@ -114,7 +114,6 @@ namespace PrivateEye
                 case 'T':
                     //type definition                    
                     var data = ReadDefinition(line);
-                    Console.WriteLine("Type definition. " + data.Name);
                     _classDefinitions.TryAdd(data.Identifier,
                         new ClassDefinition
                         {
@@ -128,7 +127,6 @@ namespace PrivateEye
                     //method definition
                     //TODO hook method definition
                     var mdata = ReadDefinition(line);
-                    Console.WriteLine("Method definition. " + mdata.Name);
                     _methodDefinitions.TryAdd(mdata.Identifier,
                         new MethodDefinition
                         {
@@ -145,7 +143,6 @@ namespace PrivateEye
 
         private static DefinitionData ReadDefinition(string line)
         {
-            Console.WriteLine("reading definition of " + line);
             var res = StringParsing.ReadULong(line, 2);
             var res2 = StringParsing.ReadString(line, res.Item2);
             return new DefinitionData() {Identifier = res.Item1, Name = res2.Item1};
@@ -153,7 +150,6 @@ namespace PrivateEye
 
         private static EventData ReadEvent(string line)
         {
-            Console.WriteLine("reading definition of " + line);
             var res = StringParsing.ReadULong(line, 2);
             var res2 = StringParsing.ReadULong(line, res.Item2);
             var res3 = StringParsing.ReadULong(line, res2.Item2);
