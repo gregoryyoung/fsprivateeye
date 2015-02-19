@@ -59,7 +59,6 @@ namespace PrivateEye
         public static void EnableProfiler()
         {
             StartProfiling();
-            EnterMatryoshka();
         }
 
         public static void Summary()
@@ -69,6 +68,7 @@ namespace PrivateEye
 
         static void ReadLoop(SafeFileHandle handle)
         {
+            EnterMatryoshka();
             var lastState = new ParserState { LineRead = false, Position = 0 };
             var buffer = new byte[4906];
             while (true)
@@ -159,6 +159,7 @@ namespace PrivateEye
         //command helpers
         static void StartProfiling() { BA91E1230BF74A17AB35D3879E65D032();}
         static void LeaveMatryoshka() { BB8F606F50BD474293A734159ABA1D23();}
+        [MethodImpl(MethodImplOptions.NoInlining)]
         static void EnterMatryoshka() { AC4A98BC81E94DADB71D1FABA30E0703();}
         static void ForceFlush() { DE259A95ABCA4803A7731665B38DB33A(); }
 
